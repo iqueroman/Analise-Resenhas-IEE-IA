@@ -24,6 +24,7 @@ class AnalisadorIA:
         """
         resultados = []
         tamanho_lote = 40
+        max_tentativas = 3  # Número máximo de tentativas por texto
         
         for i in range(0, len(resumos), tamanho_lote):
             lote_atual = resumos[i:i + tamanho_lote]
@@ -36,91 +37,100 @@ class AnalisadorIA:
                     'Texto_Normalizado': texto
                 }
                 
-                # Análise GPTZero
-                try:
-                    gpt_zero_result = self.gpt_zero.analisar_texto(texto)
-                    resultado.update({
-                        # Metadados
-                        'GPTZero_Versao': gpt_zero_result['version'],
-                        'GPTZero_ScanID': gpt_zero_result['scan_id'],
-                        
-                        # Probabilidades principais
-                        'GPTZero_Prob_Media_IA': gpt_zero_result['documento']['prob_media_ia'],
-                        'GPTZero_Prob_IA': gpt_zero_result['documento']['prob_classes']['ai'],
-                        'GPTZero_Prob_Humano': gpt_zero_result['documento']['prob_classes']['human'],
-                        'GPTZero_Prob_Misto': gpt_zero_result['documento']['prob_classes']['mixed'],
-                        
-                        # Confiança e classificação
-                        'GPTZero_Categoria_Confianca': gpt_zero_result['documento']['categoria_confianca'],
-                        'GPTZero_Pontuacao_Confianca': gpt_zero_result['documento']['pontuacao_confianca'],
-                        'GPTZero_Classe_Prevista': gpt_zero_result['documento']['classe_prevista'],
-                        'GPTZero_Classificacao': gpt_zero_result['documento']['classificacao_documento'],
-                        
-                        # Mensagem
-                        'GPTZero_Mensagem': gpt_zero_result['documento']['mensagem_resultado'],
-                        
-                        # Sentenças destacadas
-                        'GPTZero_Sentencas_Destacadas': '; '.join([
-                            s['texto'] for s in gpt_zero_result['sentencas'] 
-                            if s['destacar_ia']
-                        ])
-                    })
-                except Exception as e:
-                    self.logger.error(f"Erro na análise GPTZero de {nome_livro}: {str(e)}")
-                    resultado.update({
-                        'GPTZero_Versao': None,
-                        'GPTZero_ScanID': None,
-                        'GPTZero_Prob_Media_IA': -1,
-                        'GPTZero_Prob_IA': -1,
-                        'GPTZero_Prob_Humano': -1,
-                        'GPTZero_Prob_Misto': -1,
-                        'GPTZero_Categoria_Confianca': None,
-                        'GPTZero_Pontuacao_Confianca': -1,
-                        'GPTZero_Classe_Prevista': None,
-                        'GPTZero_Classificacao': None,
-                        'GPTZero_Mensagem': None,
-                        'GPTZero_Sentencas_Destacadas': None
-                    })
+                # Análise GPTZero com retry
+                for tentativa in range(max_tentativas):
+                    try:
+                        gpt_zero_result = self.gpt_zero.analisar_texto(texto)
+                        resultado.update({
+                            # Metadados
+                            'GPTZero_Versao': gpt_zero_result['version'],
+                            'GPTZero_ScanID': gpt_zero_result['scan_id'],
+                            
+                            # Probabilidades principais
+                            'GPTZero_Prob_Media_IA': gpt_zero_result['documento']['prob_media_ia'],
+                            'GPTZero_Prob_IA': gpt_zero_result['documento']['prob_classes']['ai'],
+                            'GPTZero_Prob_Humano': gpt_zero_result['documento']['prob_classes']['human'],
+                            'GPTZero_Prob_Misto': gpt_zero_result['documento']['prob_classes']['mixed'],
+                            
+                            # Confiança e classificação
+                            'GPTZero_Categoria_Confianca': gpt_zero_result['documento']['categoria_confianca'],
+                            'GPTZero_Pontuacao_Confianca': gpt_zero_result['documento']['pontuacao_confianca'],
+                            'GPTZero_Classe_Prevista': gpt_zero_result['documento']['classe_prevista'],
+                            'GPTZero_Classificacao': gpt_zero_result['documento']['classificacao_documento'],
+                            
+                            # Mensagem
+                            'GPTZero_Mensagem': gpt_zero_result['documento']['mensagem_resultado'],
+                            
+                            # Sentenças destacadas
+                            'GPTZero_Sentencas_Destacadas': '; '.join([
+                                s['texto'] for s in gpt_zero_result['sentencas'] 
+                                if s['destacar_ia']
+                            ])
+                        })
+                        break  # Sucesso, sai do loop de tentativas
+                    except Exception as e:
+                        self.logger.error(f"Tentativa {tentativa + 1} falhou para GPTZero em {nome_livro}: {str(e)}")
+                        if tentativa == max_tentativas - 1:  # Última tentativa
+                            self.logger.error(f"Todas as tentativas falharam para GPTZero em {nome_livro}")
+                            resultado.update({
+                                'GPTZero_Versao': None,
+                                'GPTZero_ScanID': None,
+                                'GPTZero_Prob_Media_IA': -1,
+                                'GPTZero_Prob_IA': -1,
+                                'GPTZero_Prob_Humano': -1,
+                                'GPTZero_Prob_Misto': -1,
+                                'GPTZero_Categoria_Confianca': None,
+                                'GPTZero_Pontuacao_Confianca': -1,
+                                'GPTZero_Classe_Prevista': None,
+                                'GPTZero_Classificacao': None,
+                                'GPTZero_Mensagem': None,
+                                'GPTZero_Sentencas_Destacadas': None
+                            })
+                        else:
+                            sleep(5)  # Espera 5 segundos antes de tentar novamente
                 
-                # Análise ZeroGPT
-                try:
-                    zero_gpt_result = self.zero_gpt.analisar_texto(texto)
-                    
-                    # Formata as sentenças IA para exibição no Excel
-                    sentencas_ia = zero_gpt_result['sentencas_ia']
-                    if sentencas_ia:
-                        # Remove caracteres problemáticos e formata cada sentença
-                        sentencas_formatadas = [
-                            f"{i+1}. {str(sentenca).strip().replace('[', '(').replace(']', ')')}"
-                            for i, sentenca in enumerate(sentencas_ia)
-                        ]
-                        # Junta as sentenças com quebra de linha
-                        texto_sentencas = "\n".join(sentencas_formatadas)
-                    else:
-                        texto_sentencas = "Nenhuma sentença identificada como IA"
-                    
-                    resultado.update({
-                        'ZeroGPT_Sucesso': zero_gpt_result['success'],
-                        'ZeroGPT_Total_Palavras': zero_gpt_result['total_palavras'],
-                        'ZeroGPT_Palavras_IA': zero_gpt_result['palavras_ia'],
-                        'ZeroGPT_Porcentagem_IA': zero_gpt_result['porcentagem_ia'],
-                        'ZeroGPT_Sentencas_IA': texto_sentencas,  # Sentenças formatadas
-                        'ZeroGPT_Feedback': zero_gpt_result['feedback'],
-                        'ZeroGPT_Mensagem': zero_gpt_result['mensagem']
-                    })
-                except Exception as e:
-                    self.logger.error(f"Erro na análise ZeroGPT de {nome_livro}: {str(e)}")
-                    resultado.update({
-                        'ZeroGPT_Sucesso': None,
-                        'ZeroGPT_Total_Palavras': None,
-                        'ZeroGPT_Palavras_IA': None,
-                        'ZeroGPT_Porcentagem_IA': None,
-                        'ZeroGPT_Sentencas_IA': None,
-                        'ZeroGPT_Feedback': None,
-                        'ZeroGPT_Mensagem': None
-                    })
+                # Análise ZeroGPT com retry
+                for tentativa in range(max_tentativas):
+                    try:
+                        zero_gpt_result = self.zero_gpt.analisar_texto(texto)
+                        # Formata as sentenças IA para exibição no Excel
+                        sentencas_ia = zero_gpt_result['sentencas_ia']
+                        if sentencas_ia:
+                            sentencas_formatadas = [
+                                f"{i+1}. {str(sentenca).strip().replace('[', '(').replace(']', ')')}"
+                                for i, sentenca in enumerate(sentencas_ia)
+                            ]
+                            texto_sentencas = "\n".join(sentencas_formatadas)
+                        else:
+                            texto_sentencas = "Nenhuma sentença identificada como IA"
+                        
+                        resultado.update({
+                            'ZeroGPT_Sucesso': zero_gpt_result['success'],
+                            'ZeroGPT_Total_Palavras': zero_gpt_result['total_palavras'],
+                            'ZeroGPT_Palavras_IA': zero_gpt_result['palavras_ia'],
+                            'ZeroGPT_Porcentagem_IA': zero_gpt_result['porcentagem_ia'],
+                            'ZeroGPT_Sentencas_IA': texto_sentencas,  # Sentenças formatadas
+                            'ZeroGPT_Feedback': zero_gpt_result['feedback'],
+                            'ZeroGPT_Mensagem': zero_gpt_result['mensagem']
+                        })
+                        break  # Sucesso, sai do loop de tentativas
+                    except Exception as e:
+                        self.logger.error(f"Tentativa {tentativa + 1} falhou para ZeroGPT em {nome_livro}: {str(e)}")
+                        if tentativa == max_tentativas - 1:  # Última tentativa
+                            self.logger.error(f"Todas as tentativas falharam para ZeroGPT em {nome_livro}")
+                            resultado.update({
+                                'ZeroGPT_Sucesso': None,
+                                'ZeroGPT_Total_Palavras': None,
+                                'ZeroGPT_Palavras_IA': None,
+                                'ZeroGPT_Porcentagem_IA': None,
+                                'ZeroGPT_Sentencas_IA': None,
+                                'ZeroGPT_Feedback': None,
+                                'ZeroGPT_Mensagem': None
+                            })
+                        else:
+                            sleep(5)  # Espera 5 segundos antes de tentar novamente
                 
-                # Adiciona delay entre chamadas
+                # Adiciona delay entre textos
                 sleep(1)
                 resultados.append(resultado)
             

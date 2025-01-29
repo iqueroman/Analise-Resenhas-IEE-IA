@@ -9,6 +9,7 @@ Resumos/*
 
 # Ignora explicitamente a pasta de relatórios
 Resumos/Relatórios/
+Demo
 
 # Arquivos do Python
 __pycache__/

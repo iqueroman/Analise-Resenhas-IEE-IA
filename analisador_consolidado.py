@@ -4,6 +4,7 @@ from pathlib import Path
 import logging
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font, Alignment
+import openpyxl
 
 class AnalisadorConsolidado:
     def __init__(self, pasta_relatorios: Path):
@@ -68,53 +69,7 @@ class AnalisadorConsolidado:
             # Ordena por percentual de resenhas marcadas
             df_consolidado = df_consolidado.sort_values('Percentual_Marcadas_>40', ascending=False)
             
-            # Gera gráfico de dispersão original
-            plt.figure(figsize=(10, 8))
-            plt.scatter(df_consolidado['Media_GPTZero'], df_consolidado['Media_ZeroGPT'])
-            
-            # Adiciona rótulos para cada ponto
-            for i, participante in enumerate(df_consolidado['Participante']):
-                plt.annotate(participante, 
-                           (df_consolidado['Media_GPTZero'].iloc[i], 
-                            df_consolidado['Media_ZeroGPT'].iloc[i]))
-            
-            plt.xlabel('Média GPTZero_Prob_IA')
-            plt.ylabel('Média ZeroGPT_Porcentagem_IA')
-            plt.title('Comparação entre Detectores por Participante')
-            plt.grid(True)
-            
-            # Define limites fixos para os eixos
-            plt.xlim(0, 1)  # GPTZero vai de 0 a 1
-            plt.ylim(0, 100)  # ZeroGPT vai de 0 a 100
-            
-            # Salva o gráfico de dispersão
-            arquivo_grafico_dispersao = self.pasta_relatorios / 'grafico_dispersao_consolidado.png'
-            plt.savefig(arquivo_grafico_dispersao)
-            plt.close()
-            
-            # Gera novo gráfico de barras
-            plt.figure(figsize=(12, 6))
-            bars = plt.bar(df_consolidado['Participante'], df_consolidado['Percentual_Marcadas_>40'])
-            
-            # Adiciona rótulos nas barras
-            for bar in bars:
-                height = bar.get_height()
-                plt.text(bar.get_x() + bar.get_width()/2., height,
-                        f'{height:.1f}%',
-                        ha='center', va='bottom')
-            
-            plt.xticks(rotation=45, ha='right')
-            plt.xlabel('Participante')
-            plt.ylabel('% de Resenhas Marcadas como IA (>40%)')
-            plt.title('Percentual de Resenhas Marcadas como IA por Participante')
-            plt.tight_layout()
-            
-            # Salva o gráfico de barras
-            arquivo_grafico_barras = self.pasta_relatorios / 'grafico_barras_consolidado.png'
-            plt.savefig(arquivo_grafico_barras)
-            plt.close()
-            
-            # Agora sim formata a coluna de percentual para mostrar % no Excel
+            # Formata a coluna de percentual para mostrar % no Excel
             df_consolidado['Percentual_Marcadas_>40'] = df_consolidado['Percentual_Marcadas_>40'].apply(lambda x: f'{x:.1f}%')
             
             # Gera arquivo Excel com formatação
@@ -137,11 +92,34 @@ class AnalisadorConsolidado:
                 for cell in worksheet[1]:
                     cell.font = Font(bold=True)
                     cell.alignment = Alignment(horizontal='center', wrap_text=True)
+
+                # Adiciona comentários explicativos
+                explicacoes = {
+                    'Participante': 'Nome do participante extraído do nome do arquivo',
+                    'Total_Resenhas': 'Número total de resenhas enviadas pelo participante',
+                    'Total_GPTZero_80': 'Número de resenhas com GPTZero_Prob_IA >= 0.80',
+                    'Total_ZeroGPT_80': 'Número de resenhas com ZeroGPT_Porcentagem_IA >= 80',
+                    'Total_GPTZero_60': 'Número de resenhas com GPTZero_Prob_IA >= 0.60',
+                    'Total_ZeroGPT_60': 'Número de resenhas com ZeroGPT_Porcentagem_IA >= 60',
+                    'Total_GPTZero_40': 'Número de resenhas com GPTZero_Prob_IA >= 0.40',
+                    'Total_ZeroGPT_40': 'Número de resenhas com ZeroGPT_Porcentagem_IA >= 40',
+                    'Total_Marcadas_IA': 'Número de resenhas que têm (GPTZero_Prob_IA >= 0.40 OU ZeroGPT_Porcentagem_IA >= 40)',
+                    'Percentual_Marcadas_>40': 'Total_Marcadas_IA dividido pelo Total_Resenhas, multiplicado por 100',
+                    'Media_GPTZero': 'Média do GPTZero_Prob_IA de todas as resenhas do participante',
+                    'Media_ZeroGPT': 'Média do ZeroGPT_Porcentagem_IA de todas as resenhas do participante'
+                }
+
+                # Adiciona os comentários nas células
+                for idx, col in enumerate(df_consolidado.columns):
+                    if col in explicacoes:
+                        cell = worksheet[f"{get_column_letter(idx + 1)}1"]
+                        cell.comment = openpyxl.comments.Comment(
+                            explicacoes[col],
+                            'Detector IA'
+                        )
             
             self.logger.info(f"Relatório consolidado gerado: {arquivo_saida}")
-            self.logger.info(f"Gráficos gerados: {arquivo_grafico_dispersao}, {arquivo_grafico_barras}")
-            
-            return arquivo_saida, arquivo_grafico_dispersao, arquivo_grafico_barras
+            return arquivo_saida
             
         except Exception as e:
             self.logger.error(f"Erro ao gerar relatório consolidado: {str(e)}", exc_info=True)
