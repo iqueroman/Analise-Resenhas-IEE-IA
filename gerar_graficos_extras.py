@@ -70,16 +70,17 @@ def gerar_grafico_barras_absoluto(df, coluna, titulo, arquivo_saida):
 
 def gerar_grafico_dispersao(df, arquivo_saida):
     plt.figure(figsize=(10, 8))
-    plt.scatter(df['Media_GPTZero'], df['Media_ZeroGPT'])
+    # Normaliza ZeroGPT para escala 0-1
+    plt.scatter(df['Media_ZeroGPT'] / 100, df['Media_GPTZero'])
     
     # Adiciona rótulos para cada ponto
     for i, participante in enumerate(df['Participante']):
         plt.annotate(participante, 
-                   (df['Media_GPTZero'].iloc[i], 
-                    df['Media_ZeroGPT'].iloc[i]))
+                   (df['Media_ZeroGPT'].iloc[i] / 100, 
+                    df['Media_GPTZero'].iloc[i]))
     
-    plt.xlabel('Média GPTZero_Prob_IA')
-    plt.ylabel('Média ZeroGPT_Porcentagem_IA')
+    plt.xlabel('ZeroGPT_Porcentagem_IA (normalizado 0-1)')
+    plt.ylabel('GPTZero_Prob_IA')
     plt.title('Comparação entre Detectores por Participante')
     plt.grid(True)
     
@@ -108,21 +109,49 @@ def gerar_grafico_dispersao_absoluto(pasta_relatorios, arquivo_saida):
     
     df_contagens = pd.DataFrame(contagens)
     
-    # Plota o gráfico
-    plt.scatter(df_contagens['Total_GPTZero_40'], df_contagens['Total_ZeroGPT_40'])
+    # Plota o gráfico com eixos invertidos
+    plt.scatter(df_contagens['Total_ZeroGPT_40'], df_contagens['Total_GPTZero_40'])
     
     # Adiciona rótulos para cada ponto
     for i, participante in enumerate(df_contagens['Participante']):
         plt.annotate(participante, 
-                   (df_contagens['Total_GPTZero_40'].iloc[i], 
-                    df_contagens['Total_ZeroGPT_40'].iloc[i]))
+                   (df_contagens['Total_ZeroGPT_40'].iloc[i], 
+                    df_contagens['Total_GPTZero_40'].iloc[i]))
     
-    plt.xlabel('Número de Resenhas com GPTZero_Prob_IA >= 0.40')
-    plt.ylabel('Número de Resenhas com ZeroGPT_Porcentagem_IA >= 40')
+    plt.xlabel('Número de Resenhas com ZeroGPT_Porcentagem_IA >= 40')
+    plt.ylabel('Número de Resenhas com GPTZero_Prob_IA >= 0.40')
     plt.title('Comparação do Número de Resenhas Marcadas por Cada Detector')
     plt.grid(True)
     
+    # Força o uso de números inteiros nos eixos
+    plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+    plt.gca().yaxis.set_major_locator(plt.MaxNLocator(integer=True))
+    
     plt.savefig(arquivo_saida)
+    plt.close()
+
+def gerar_grafico_dispersao_individual(df, participante, arquivo_saida):
+    plt.figure(figsize=(10, 8))
+    # Normaliza ZeroGPT para escala 0-1
+    plt.scatter(df['ZeroGPT_Porcentagem_IA'] / 100, df['GPTZero_Prob_IA'])
+    
+    # Adiciona rótulos para cada ponto
+    for i, livro in enumerate(df['Livro/curso']):
+        plt.annotate(livro, 
+                   (df['ZeroGPT_Porcentagem_IA'].iloc[i] / 100, 
+                    df['GPTZero_Prob_IA'].iloc[i]),
+                   fontsize=8)
+    
+    plt.xlabel('ZeroGPT_Porcentagem_IA (normalizado 0-1)')
+    plt.ylabel('GPTZero_Prob_IA')
+    plt.title(f'Comparação entre Detectores - {participante}')
+    plt.grid(True)
+    
+    # Define limites fixos para os eixos (agora ambos 0-1)
+    plt.xlim(0, 1)
+    plt.ylim(0, 1)
+    
+    plt.savefig(arquivo_saida, bbox_inches='tight', dpi=300)
     plt.close()
 
 def main():
@@ -130,6 +159,20 @@ def main():
     pasta_relatorios = Path("Resumos/Relatórios")
     
     try:
+        # Gera gráficos individuais
+        for arquivo in pasta_relatorios.glob('relatório_*.xlsx'):
+            if 'consolidado' not in arquivo.stem:
+                participante = arquivo.stem.replace('relatório_', '')
+                df_individual = pd.read_excel(arquivo)
+                
+                # Gera gráfico de dispersão individual
+                gerar_grafico_dispersao_individual(
+                    df_individual,
+                    participante,
+                    pasta_relatorios / f'grafico_dispersao_{participante}.png'
+                )
+                logger.info(f"Gerado gráfico de dispersão para {participante}")
+        
         # Lê o relatório consolidado
         df = pd.read_excel(pasta_relatorios / "relatorio_consolidado.xlsx")
         
