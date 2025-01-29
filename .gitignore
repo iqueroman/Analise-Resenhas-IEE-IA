@@ -1,0 +1,32 @@
+# Arquivo de configuração com chaves sensíveis
+config.py
+
+# Ignora tudo dentro de Resumos
+Resumos/*
+
+# Mas mantém a pasta Resumos em si
+!Resumos/
+
+# Ignora explicitamente a pasta de relatórios
+Resumos/Relatórios/
+
+# Arquivos do Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Bases de dados
+Bases de dados/
+bases de dados/ 
